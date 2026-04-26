@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.env
+
+# Large data files — too big for GitHub
+data/
+backend/restaurants.db
+backend/cf_model.pkl
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# macOS
+.DS_Store
+
+# Claude Code internals
+.claude/
+
+# Editor
+.vscode/
+.idea/
