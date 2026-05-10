@@ -43,7 +43,93 @@ Switching between modes is a single toggle click. Both share the same database a
 
 ---
 
-## Slide 3 — Tech Stack
+## Slide 3 — System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        USER BROWSER                              │
+│                                                                  │
+│   React 18 + Vite 5 + Tailwind CSS + React Router v6            │
+│                                                                  │
+│  ┌──────────────┐   ┌──────────────────┐   ┌─────────────────┐  │
+│  │  Home Page   │   │  Restaurant      │   │  Personalized   │  │
+│  │  (Browse)    │   │  Detail Page     │   │  Mode (SVD)     │  │
+│  │  SearchPanel │   │  SimilarStrip    │   │  TasteProfile   │  │
+│  └──────┬───────┘   └────────┬─────────┘   └────────┬────────┘  │
+│         │   Axios HTTP (/api)│                       │           │
+└─────────┼────────────────────┼───────────────────────┼───────────┘
+          │                    │                       │
+          ▼                    ▼                       ▼
+┌──────────────────────────────────────────────────────────────────┐
+│               FastAPI Backend  (Uvicorn, port 8000)              │
+│                                                                  │
+│  GET /api/restaurants        ← search + filter + paginate        │
+│  GET /api/restaurants/{id}   ← single restaurant detail          │
+│  GET /api/restaurants/{id}/similar  ← TF-IDF similar            │
+│  GET /api/cities             ← 1,011 city list                   │
+│  GET /api/cuisines           ← 119+ cuisine list                 │
+│  GET /api/recommendations    ← SVD personalized (500 candidates) │
+│  GET /api/recommendations/sample-users  ← demo user IDs         │
+│                                                                  │
+│  SQLAlchemy ORM  ·  Pydantic schemas  ·  CORS middleware         │
+└────────────┬─────────────────────────┬───────────────────────────┘
+             │                         │
+     ┌───────▼────────┐    ┌───────────▼──────────────────────────┐
+     │   SQLite DB    │    │   In-Memory ML Engines (at startup)  │
+     │ restaurants.db │    │                                      │
+     │                │    │  Engine 1 — TF-IDF (Content-Based)   │
+     │  restaurants   │    │  ┌────────────────────────────────┐  │
+     │  67,762 rows   │◄───┤  │ feature: categories+city+price │  │
+     │                │    │  │ TfidfVectorizer → sparse matrix│  │
+     │  reviews       │    │  │ cosine_similarity on-demand    │  │
+     │  5,257,990 rows│    │  └────────────────────────────────┘  │
+     └───────┬────────┘    │                                      │
+             │             │  Engine 2 — SVD (Collaborative)      │
+             │             │  ┌────────────────────────────────┐  │
+             │             │  │ cf_model.pkl (trained offline) │  │
+             │             │  │ 50 latent factors, ~3.9M rows  │  │
+             │             │  │ score = μ + bu + bi + pu·qi    │  │
+             │             │  │ matrix multiply → top-500      │  │
+             │             │  └────────────────────────────────┘  │
+             │             └──────────────────────────────────────┘
+             │
+     ┌───────▼────────────────────────────┐
+     │       One-Time Data Loading        │
+     │                                    │
+     │  yelp_loader.py                    │
+     │  Yelp JSON (5 GB reviews) ──────►  │
+     │  yelp_business.json  ──────────►  SQLite
+     │                                    │
+     │  train_cf.py                       │
+     │  3.88M filtered reviews ───────►  cf_model.pkl
+     └────────────────────────────────────┘
+```
+
+### Data Flow — Browse Mode
+```
+User types city + cuisine → React dispatches GET /api/restaurants?city=X&cuisine=Y
+→ FastAPI queries SQLite → returns paginated JSON → React renders card grid
+```
+
+### Data Flow — Personalized Mode
+```
+User enters Yelp ID → GET /api/recommendations?user_id=X&n=500
+→ SVD matrix multiply scores all 67k restaurants in ~10ms
+→ Top 500 candidates filtered by SQL (city/cuisine/price/delivery)
+→ Results re-ranked by CF score → reason pills computed from review history
+→ React renders cards with "Because you love" pills
+```
+
+### Data Flow — Similar Restaurants
+```
+User opens detail page → GET /api/restaurants/{id}/similar
+→ TF-IDF sparse matrix-vector multiply vs. all 67k restaurants
+→ Top-N by cosine similarity → React renders horizontal strip
+```
+
+---
+
+## Slide 4 — Tech Stack
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -71,7 +157,7 @@ Switching between modes is a single toggle click. Both share the same database a
 
 ---
 
-## Slide 4 — The Data
+## Slide 5 — The Data
 
 **Source:** Yelp Academic Dataset (publicly available for research)
 
