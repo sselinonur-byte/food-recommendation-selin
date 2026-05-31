@@ -11,19 +11,23 @@ from routers import restaurants, cities, cuisines, recommendations
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
 
-    db = SessionLocal()
-    all_restaurants = db.query(Restaurant).all()
-    db.close()
+        db = SessionLocal()
+        all_restaurants = db.query(Restaurant).all()
+        db.close()
 
-    recommender.build(all_restaurants)
-    print(f'TF-IDF matrix built for {len(all_restaurants):,} restaurants')
+        recommender.build(all_restaurants)
+        print(f"TF-IDF matrix built for {len(all_restaurants)} restaurants")
 
-    if cf_model.load():
-        print('Personalized recommendations: enabled')
-    else:
-        print('Personalized recommendations: disabled (run train_cf.py to enable)')
+        if cf_model.load():
+            print("CF model loaded")
+        else:
+            print("CF model not found")
+
+    except Exception as e:
+        print("Startup error:", e)
 
     yield
 
@@ -32,7 +36,7 @@ app = FastAPI(title="Food Recommendation API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],  # IMPORTANT for Cloud Run
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
